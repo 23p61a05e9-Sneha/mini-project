@@ -14,7 +14,167 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      applications: {
+        Row: {
+          applied_date: string
+          created_at: string
+          email_body: string | null
+          email_sent: boolean
+          email_subject: string | null
+          id: string
+          job_id: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          applied_date?: string
+          created_at?: string
+          email_body?: string | null
+          email_sent?: boolean
+          email_subject?: string | null
+          id?: string
+          job_id: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          applied_date?: string
+          created_at?: string
+          email_body?: string | null
+          email_sent?: boolean
+          email_subject?: string | null
+          id?: string
+          job_id?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "applications_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      jobs: {
+        Row: {
+          company: string
+          created_at: string
+          description: string | null
+          external_id: string | null
+          id: string
+          location: string
+          match_score: number | null
+          posted_date: string | null
+          recruiter_email: string | null
+          recruiter_name: string | null
+          salary: string | null
+          skills: string[] | null
+          source: string | null
+          title: string
+          type: string
+        }
+        Insert: {
+          company: string
+          created_at?: string
+          description?: string | null
+          external_id?: string | null
+          id?: string
+          location?: string
+          match_score?: number | null
+          posted_date?: string | null
+          recruiter_email?: string | null
+          recruiter_name?: string | null
+          salary?: string | null
+          skills?: string[] | null
+          source?: string | null
+          title: string
+          type?: string
+        }
+        Update: {
+          company?: string
+          created_at?: string
+          description?: string | null
+          external_id?: string | null
+          id?: string
+          location?: string
+          match_score?: number | null
+          posted_date?: string | null
+          recruiter_email?: string | null
+          recruiter_name?: string | null
+          salary?: string | null
+          skills?: string[] | null
+          source?: string | null
+          title?: string
+          type?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          email: string
+          experience: string | null
+          gemini_key: string | null
+          id: string
+          min_salary: string | null
+          name: string
+          preferred_job_types: string[] | null
+          preferred_locations: string[] | null
+          preferred_roles: string[] | null
+          skills: string[] | null
+          smtp_email: string | null
+          smtp_host: string | null
+          smtp_password: string | null
+          smtp_port: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string
+          experience?: string | null
+          gemini_key?: string | null
+          id?: string
+          min_salary?: string | null
+          name?: string
+          preferred_job_types?: string[] | null
+          preferred_locations?: string[] | null
+          preferred_roles?: string[] | null
+          skills?: string[] | null
+          smtp_email?: string | null
+          smtp_host?: string | null
+          smtp_password?: string | null
+          smtp_port?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          experience?: string | null
+          gemini_key?: string | null
+          id?: string
+          min_salary?: string | null
+          name?: string
+          preferred_job_types?: string[] | null
+          preferred_locations?: string[] | null
+          preferred_roles?: string[] | null
+          skills?: string[] | null
+          smtp_email?: string | null
+          smtp_host?: string | null
+          smtp_password?: string | null
+          smtp_port?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
