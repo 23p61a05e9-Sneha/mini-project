@@ -58,13 +58,13 @@ const JobSearch = () => {
         return;
       }
 
-      if (jobRows.length === 0) {
+      if (!jobRows || jobRows.length === 0) {
         toast.info("No jobs found", { description: "Try broadening your search criteria." });
+        setJobs([]);
       } else {
         toast.success(`Found ${jobRows.length} jobs`, { description: "AI-ranked by skill match score." });
+        setJobs(jobRows);
       }
-
-      setJobs(jobRows);
       navigate("/results");
     } catch (err) {
       toast.error("Search failed. Please try again.");
