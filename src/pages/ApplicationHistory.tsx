@@ -1,14 +1,14 @@
 import { motion } from "framer-motion";
-import { Check, Mail, Clock, XCircle } from "lucide-react";
+import { Check, Mail, Clock, XCircle, Briefcase, TrendingUp } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 import AppLayout from "@/components/AppLayout";
 
 const statusConfig = {
-  applied: { icon: Clock, color: "text-warning", bg: "bg-warning/10", label: "Applied" },
-  emailed: { icon: Mail, color: "text-info", bg: "bg-info/10", label: "Emailed" },
-  interview: { icon: Check, color: "text-success", bg: "bg-success/10", label: "Interview" },
-  rejected: { icon: XCircle, color: "text-destructive", bg: "bg-destructive/10", label: "Rejected" },
-  accepted: { icon: Check, color: "text-success", bg: "bg-success/10", label: "Accepted" },
+  applied: { icon: Clock, color: "text-warning", bg: "bg-warning/10", border: "border-warning/20", label: "Applied" },
+  emailed: { icon: Mail, color: "text-info", bg: "bg-info/10", border: "border-info/20", label: "Emailed" },
+  interview: { icon: TrendingUp, color: "text-success", bg: "bg-success/10", border: "border-success/20", label: "Interview" },
+  rejected: { icon: XCircle, color: "text-destructive", bg: "bg-destructive/10", border: "border-destructive/20", label: "Rejected" },
+  accepted: { icon: Check, color: "text-success", bg: "bg-success/10", border: "border-success/20", label: "Accepted" },
 };
 
 const ApplicationHistory = () => {
@@ -17,53 +17,59 @@ const ApplicationHistory = () => {
   return (
     <AppLayout>
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-2xl font-bold text-foreground mb-1">Application History</h1>
-        <p className="text-sm text-muted-foreground mb-6">{applications.length} total applications</p>
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold text-foreground">Application History</h1>
+          <p className="text-muted-foreground mt-1">{applications.length} total applications tracked</p>
+        </div>
 
         {applications.length === 0 ? (
-          <div className="text-center py-20">
-            <p className="text-muted-foreground">No applications yet. Start by searching for jobs.</p>
+          <div className="text-center py-24">
+            <div className="h-16 w-16 rounded-2xl bg-secondary flex items-center justify-center mx-auto mb-4">
+              <Briefcase className="h-8 w-8 text-muted-foreground" />
+            </div>
+            <p className="text-lg text-muted-foreground mb-1">No applications yet</p>
+            <p className="text-sm text-muted-foreground">Start by searching for jobs and applying.</p>
           </div>
         ) : (
-          <div className="bg-card border border-border rounded-xl overflow-hidden">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border text-xs text-muted-foreground">
-                  <th className="text-left p-4 font-medium">Job</th>
-                  <th className="text-left p-4 font-medium">Company</th>
-                  <th className="text-left p-4 font-medium">Date</th>
-                  <th className="text-left p-4 font-medium">Status</th>
-                  <th className="text-left p-4 font-medium">Email</th>
-                </tr>
-              </thead>
-              <tbody>
-                {applications.map((app) => {
-                  const cfg = statusConfig[app.status];
-                  return (
-                    <tr key={app.id} className="border-b border-border last:border-0 hover:bg-secondary/50 transition-colors">
-                      <td className="p-4 text-sm font-medium text-foreground">{app.job.title}</td>
-                      <td className="p-4 text-sm text-muted-foreground">{app.job.company}</td>
-                      <td className="p-4 text-xs text-muted-foreground font-mono">
-                        {new Date(app.appliedDate).toLocaleDateString()}
-                      </td>
-                      <td className="p-4">
-                        <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full ${cfg.bg} ${cfg.color}`}>
-                          <cfg.icon className="h-3 w-3" />
-                          {cfg.label}
-                        </span>
-                      </td>
-                      <td className="p-4">
-                        {app.emailSent ? (
-                          <span className="text-xs text-success">Sent ✓</span>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">Pending</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="space-y-3">
+            {applications.map((app, i) => {
+              const cfg = statusConfig[app.status as keyof typeof statusConfig] || statusConfig.applied;
+              return (
+                <motion.div
+                  key={app.id}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.04 }}
+                  className="bg-card border border-border rounded-xl p-5 flex items-center justify-between hover:border-primary/20 transition-all hover:shadow-card"
+                >
+                  <div className="flex items-center gap-4 min-w-0 flex-1">
+                    <div className={`h-10 w-10 rounded-lg ${cfg.bg} flex items-center justify-center shrink-0`}>
+                      <cfg.icon className={`h-5 w-5 ${cfg.color}`} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-foreground truncate">{app.job?.title || "Unknown"}</p>
+                      <p className="text-xs text-muted-foreground">{app.job?.company || "Unknown"} · {app.job?.location || "N/A"}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-4 shrink-0">
+                    <span className="text-xs text-muted-foreground font-mono hidden sm:block">
+                      {new Date(app.applied_date).toLocaleDateString()}
+                    </span>
+                    <span className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border font-medium ${cfg.bg} ${cfg.color} ${cfg.border}`}>
+                      {cfg.label}
+                    </span>
+                    {app.email_sent ? (
+                      <span className="text-xs text-success font-medium flex items-center gap-1">
+                        <Check className="h-3 w-3" /> Sent
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">Pending</span>
+                    )}
+                  </div>
+                </motion.div>
+              );
+            })}
           </div>
         )}
       </motion.div>
