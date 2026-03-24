@@ -18,16 +18,24 @@ import NotFound from "./pages/NotFound";
 const queryClient = new QueryClient();
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user } = useApp();
+  const { user, loading } = useApp();
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-background"><div className="animate-pulse text-muted-foreground">Loading...</div></div>;
   if (!user) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+};
+
+const PublicRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user, loading } = useApp();
+  if (loading) return null;
+  if (user) return <Navigate to="/dashboard" replace />;
   return <>{children}</>;
 };
 
 const AppRoutes = () => (
   <Routes>
     <Route path="/" element={<Index />} />
-    <Route path="/login" element={<Login />} />
-    <Route path="/register" element={<Register />} />
+    <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+    <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
     <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
     <Route path="/search" element={<ProtectedRoute><JobSearch /></ProtectedRoute>} />
     <Route path="/results" element={<ProtectedRoute><JobResults /></ProtectedRoute>} />
