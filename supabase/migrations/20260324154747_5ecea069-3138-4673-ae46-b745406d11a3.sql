@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX idx_jobs_external_id ON public.jobs (external_id) WHERE external_id IS NOT NULL;
