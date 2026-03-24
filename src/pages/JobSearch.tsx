@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Search, Plus, X, Sparkles, MapPin, Briefcase, GraduationCap } from "lucide-react";
 import { useApp } from "@/context/AppContext";
-import { searchJobs } from "@/lib/mockApi";
 import { supabase } from "@/integrations/supabase/client";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
@@ -44,7 +43,16 @@ const JobSearch = () => {
         }).eq("user_id", profile.user_id);
       }
 
-      const results = await searchJobs(query, preferences.skills, location, preferences.experience);
+      const { data: aiResult, error: aiError } = await supabase.functions.invoke('search-jobs', {
+        body: { query, skills: preferences.skills, location, experience: preferences.experience },
+      });
+
+      if (aiError || !aiResult?.success) {
+        toast.error(aiResult?.error || "AI search failed. Please try again.");
+        return;
+      }
+
+      const results = aiResult.jobs;
 
       // Store jobs in DB in batch
       const { data: jobRows, error: jobError } = await supabase
