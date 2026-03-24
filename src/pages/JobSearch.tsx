@@ -46,14 +46,16 @@ const JobSearch = () => {
 
       const results = await searchJobs(query, preferences.skills, location, preferences.experience);
 
-      // Store jobs in DB and get their IDs
-      const jobRows = [];
-      for (const job of results) {
-        const { data } = await supabase.from("jobs").upsert(
-          { ...job },
-          { onConflict: "external_id" }
-        ).select().single();
-        if (data) jobRows.push(data);
+      // Store jobs in DB in batch
+      const { data: jobRows, error: jobError } = await supabase
+        .from("jobs")
+        .insert(results.map((job) => ({ ...job })))
+        .select();
+
+      if (jobError) {
+        console.error("Job insert error:", jobError);
+        toast.error("Failed to save job results");
+        return;
       }
 
       if (jobRows.length === 0) {
