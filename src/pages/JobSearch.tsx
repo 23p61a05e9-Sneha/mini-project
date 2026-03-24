@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Search, Plus, X, Sparkles, MapPin, Briefcase, GraduationCap } from "lucide-react";
 import { useApp } from "@/context/AppContext";
-import { searchJobs } from "@/lib/mockApi";
 import { supabase } from "@/integrations/supabase/client";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
