@@ -61,7 +61,7 @@ const JobSearch = () => {
 
       // Only include columns that exist in the jobs table
       const cleanedJobs = results.map((job: any) => ({
-        external_id: job.external_id || null,
+        external_id: `ai_${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${job.external_id || Math.random().toString(36).slice(2)}`,
         title: job.title || 'Software Developer',
         company: job.company || 'Unknown Company',
         location: job.location || 'Remote',
