@@ -46,21 +46,44 @@ const JobSearch = () => {
         body: { query, skills: preferences.skills, location, experience: preferences.experience },
       });
 
-      if (aiError || !aiResult?.success) {
-        toast.error(aiResult?.error || "AI search failed. Please try again.");
+      if (aiError) {
+        console.error("AI function error:", aiError);
+        toast.error("AI search failed. Please try again.");
+        return;
+      }
+
+      if (!aiResult?.success || !aiResult?.jobs?.length) {
+        toast.error(aiResult?.error || "No jobs found. Try different criteria.");
         return;
       }
 
       const results = aiResult.jobs;
 
+      // Only include columns that exist in the jobs table
+      const cleanedJobs = results.map((job: any) => ({
+        external_id: job.external_id || null,
+        title: job.title || 'Software Developer',
+        company: job.company || 'Unknown Company',
+        location: job.location || 'Remote',
+        type: job.type || 'Full-time',
+        salary: job.salary || null,
+        description: job.description || null,
+        skills: Array.isArray(job.skills) ? job.skills : [],
+        match_score: typeof job.match_score === 'number' ? Math.round(job.match_score) : 70,
+        recruiter_name: job.recruiter_name || null,
+        recruiter_email: job.recruiter_email || null,
+        posted_date: job.posted_date || null,
+        source: job.source || 'AI Search',
+      }));
+
       const { data: jobRows, error: jobError } = await supabase
         .from("jobs")
-        .insert(results.map((job: any) => ({ ...job })))
+        .insert(cleanedJobs)
         .select();
 
       if (jobError) {
         console.error("Job insert error:", jobError);
-        toast.error("Failed to save job results");
+        toast.error("Failed to save job results: " + jobError.message);
         return;
       }
 
