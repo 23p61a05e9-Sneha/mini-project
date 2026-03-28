@@ -107,7 +107,7 @@ async function fetchJoBoard(query: string): Promise<JobResult[]> {
         ? `$${job.annualSalaryMin} - $${job.annualSalaryMax}`
         : null,
       description: stripHtml(job.jobExcerpt || job.jobDescription || '').slice(0, 300),
-      skills: job.jobIndustry ? [job.jobIndustry] : [],
+      skills: Array.isArray(job.jobIndustry) ? job.jobIndustry.flat() : job.jobIndustry ? [job.jobIndustry] : [],
       match_score: 0,
       recruiter_name: null,
       recruiter_email: null,
