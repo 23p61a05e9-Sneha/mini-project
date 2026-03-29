@@ -19,19 +19,81 @@ interface JobResult {
   source: string;
 }
 
-// Fetch from Remotive API (free, no key needed)
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function extractTags(tags: any[]): string[] {
+  if (!Array.isArray(tags)) return [];
+  return tags.map((t: any) => typeof t === 'string' ? t : t.name || '').filter(Boolean).slice(0, 6);
+}
+
+function todayStr(): string {
+  return new Date().toISOString().split('T')[0];
+}
+
+// ─── JSearch (RapidAPI) ───────────────────────────────────────────
+async function fetchJSearch(query: string, location: string): Promise<JobResult[]> {
+  const apiKey = Deno.env.get('RAPIDAPI_KEY');
+  if (!apiKey) {
+    console.log('RAPIDAPI_KEY not set, skipping JSearch');
+    return [];
+  }
+  try {
+    const searchQuery = location && location !== 'any location'
+      ? `${query} in ${location}`
+      : query;
+
+    const url = `https://jsearch.p.rapidapi.com/search?query=${encodeURIComponent(searchQuery)}&page=1&num_pages=2&date_posted=month`;
+    console.log('Fetching JSearch:', url);
+
+    const res = await fetch(url, {
+      headers: {
+        'x-rapidapi-key': apiKey,
+        'x-rapidapi-host': 'jsearch.p.rapidapi.com',
+      },
+    });
+
+    if (!res.ok) {
+      console.error('JSearch error:', res.status, await res.text());
+      return [];
+    }
+
+    const data = await res.json();
+    const jobs = data.data || [];
+
+    return jobs.slice(0, 20).map((job: any) => ({
+      external_id: `jsearch_${job.job_id || Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      title: job.job_title || 'Unknown Title',
+      company: job.employer_name || 'Unknown Company',
+      location: [job.job_city, job.job_state, job.job_country].filter(Boolean).join(', ') || 'Remote',
+      type: job.job_employment_type?.replace(/_/g, '-') || 'Full-time',
+      salary: job.job_min_salary && job.job_max_salary
+        ? `${job.job_salary_currency || '$'}${job.job_min_salary} - ${job.job_salary_currency || '$'}${job.job_max_salary}`
+        : null,
+      description: stripHtml(job.job_description || '').slice(0, 300),
+      skills: extractTags(job.job_required_skills || job.job_highlights?.Qualifications?.slice(0, 5) || []),
+      match_score: 0,
+      recruiter_name: job.employer_name || null,
+      recruiter_email: null,
+      posted_date: job.job_posted_at_datetime_utc?.split('T')[0] || todayStr(),
+      source: 'JSearch',
+    }));
+  } catch (err) {
+    console.error('JSearch fetch error:', err);
+    return [];
+  }
+}
+
+// ─── Remotive ─────────────────────────────────────────────────────
 async function fetchRemotive(query: string): Promise<JobResult[]> {
   try {
     const url = `https://remotive.com/api/remote-jobs?search=${encodeURIComponent(query)}&limit=20`;
     console.log('Fetching Remotive:', url);
     const res = await fetch(url);
-    if (!res.ok) {
-      console.error('Remotive error:', res.status);
-      return [];
-    }
+    if (!res.ok) return [];
     const data = await res.json();
-    const jobs = data.jobs || [];
-    return jobs.map((job: any) => ({
+    return (data.jobs || []).map((job: any) => ({
       external_id: `remotive_${job.id}`,
       title: job.title || 'Unknown Title',
       company: job.company_name || 'Unknown Company',
@@ -43,7 +105,7 @@ async function fetchRemotive(query: string): Promise<JobResult[]> {
       match_score: 0,
       recruiter_name: null,
       recruiter_email: null,
-      posted_date: job.publication_date ? job.publication_date.split('T')[0] : new Date().toISOString().split('T')[0],
+      posted_date: job.publication_date?.split('T')[0] || todayStr(),
       source: 'Remotive',
     }));
   } catch (err) {
@@ -52,19 +114,15 @@ async function fetchRemotive(query: string): Promise<JobResult[]> {
   }
 }
 
-// Fetch from Arbeitnow API (free, no key needed)
+// ─── Arbeitnow ────────────────────────────────────────────────────
 async function fetchArbeitnow(query: string): Promise<JobResult[]> {
   try {
     const url = `https://www.arbeitnow.com/api/job-board-api?search=${encodeURIComponent(query)}`;
     console.log('Fetching Arbeitnow:', url);
     const res = await fetch(url);
-    if (!res.ok) {
-      console.error('Arbeitnow error:', res.status);
-      return [];
-    }
+    if (!res.ok) return [];
     const data = await res.json();
-    const jobs = data.data || [];
-    return jobs.slice(0, 15).map((job: any) => ({
+    return (data.data || []).slice(0, 15).map((job: any) => ({
       external_id: `arbeitnow_${job.slug || Date.now()}`,
       title: job.title || 'Unknown Title',
       company: job.company_name || 'Unknown Company',
@@ -76,7 +134,7 @@ async function fetchArbeitnow(query: string): Promise<JobResult[]> {
       match_score: 0,
       recruiter_name: null,
       recruiter_email: null,
-      posted_date: job.created_at ? new Date(job.created_at * 1000).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+      posted_date: job.created_at ? new Date(job.created_at * 1000).toISOString().split('T')[0] : todayStr(),
       source: 'Arbeitnow',
     }));
   } catch (err) {
@@ -85,19 +143,15 @@ async function fetchArbeitnow(query: string): Promise<JobResult[]> {
   }
 }
 
-// Fetch from JoBoard API (free, no key needed)
-async function fetchJoBoard(query: string): Promise<JobResult[]> {
+// ─── Jobicy ───────────────────────────────────────────────────────
+async function fetchJobicy(query: string): Promise<JobResult[]> {
   try {
     const url = `https://jobicy.com/api/v2/remote-jobs?count=15&tag=${encodeURIComponent(query)}`;
     console.log('Fetching Jobicy:', url);
     const res = await fetch(url);
-    if (!res.ok) {
-      console.error('Jobicy error:', res.status);
-      return [];
-    }
+    if (!res.ok) return [];
     const data = await res.json();
-    const jobs = data.jobs || [];
-    return jobs.map((job: any) => ({
+    return (data.jobs || []).map((job: any) => ({
       external_id: `jobicy_${job.id || Date.now()}`,
       title: job.jobTitle || 'Unknown Title',
       company: job.companyName || 'Unknown Company',
@@ -111,7 +165,7 @@ async function fetchJoBoard(query: string): Promise<JobResult[]> {
       match_score: 0,
       recruiter_name: null,
       recruiter_email: null,
-      posted_date: job.pubDate ? job.pubDate.split(' ')[0] : new Date().toISOString().split('T')[0],
+      posted_date: job.pubDate?.split(' ')[0] || todayStr(),
       source: 'Jobicy',
     }));
   } catch (err) {
@@ -120,16 +174,50 @@ async function fetchJoBoard(query: string): Promise<JobResult[]> {
   }
 }
 
-function stripHtml(html: string): string {
-  return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+// ─── Location filter ──────────────────────────────────────────────
+function filterByLocation(jobs: JobResult[], location: string): JobResult[] {
+  if (!location || location === '' || location.toLowerCase() === 'any location') {
+    return jobs;
+  }
+
+  const loc = location.toLowerCase().trim();
+  const isRemoteSearch = ['remote', 'work from home', 'wfh'].some(r => loc.includes(r));
+
+  // Location aliases for better matching
+  const aliases: Record<string, string[]> = {
+    'india': ['india', 'bangalore', 'bengaluru', 'mumbai', 'delhi', 'hyderabad', 'pune', 'chennai', 'kolkata', 'noida', 'gurgaon', 'gurugram', 'in'],
+    'usa': ['usa', 'united states', 'us', 'san francisco', 'new york', 'nyc', 'seattle', 'austin', 'boston', 'chicago', 'los angeles', 'la', 'denver', 'sf'],
+    'uk': ['uk', 'united kingdom', 'london', 'manchester', 'birmingham', 'gb'],
+  };
+
+  // Find which alias group the search matches
+  let matchTerms = [loc];
+  for (const [, terms] of Object.entries(aliases)) {
+    if (terms.some(t => loc.includes(t) || t.includes(loc))) {
+      matchTerms = terms;
+      break;
+    }
+  }
+
+  const filtered = jobs.filter(j => {
+    const jLoc = j.location.toLowerCase();
+    if (isRemoteSearch) {
+      return jLoc.includes('remote') || jLoc.includes('anywhere') || jLoc.includes('worldwide');
+    }
+    return matchTerms.some(t => jLoc.includes(t)) ||
+      jLoc.includes('remote') ||
+      jLoc.includes('anywhere') ||
+      jLoc.includes('worldwide');
+  });
+
+  // If filtering removes too many results, return all but boost matched ones
+  if (filtered.length < 3) {
+    return jobs;
+  }
+  return filtered;
 }
 
-function extractTags(tags: any[]): string[] {
-  if (!Array.isArray(tags)) return [];
-  return tags.map((t: any) => typeof t === 'string' ? t : t.name || '').filter(Boolean).slice(0, 6);
-}
-
-// Use Lovable AI to compute match scores based on user skills
+// ─── AI match scoring ─────────────────────────────────────────────
 async function enrichWithMatchScores(jobs: JobResult[], userSkills: string[]): Promise<JobResult[]> {
   if (!jobs.length || !userSkills.length) {
     return jobs.map(j => ({ ...j, match_score: 60 + Math.floor(Math.random() * 25) }));
@@ -141,7 +229,9 @@ async function enrichWithMatchScores(jobs: JobResult[], userSkills: string[]): P
   }
 
   try {
-    const jobSummaries = jobs.map((j, i) => `${i}: "${j.title}" at ${j.company} - skills: ${j.skills.join(', ')} - ${j.description.slice(0, 100)}`).join('\n');
+    const jobSummaries = jobs.map((j, i) =>
+      `${i}: "${j.title}" at ${j.company} [${j.location}] - skills: ${j.skills.join(', ')} - ${j.description.slice(0, 80)}`
+    ).join('\n');
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -182,6 +272,7 @@ async function enrichWithMatchScores(jobs: JobResult[], userSkills: string[]): P
   return jobs.map(j => ({ ...j, match_score: 60 + Math.floor(Math.random() * 25) }));
 }
 
+// ─── Main handler ─────────────────────────────────────────────────
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -191,32 +282,25 @@ Deno.serve(async (req) => {
     const { query, skills, location, experience } = await req.json();
     const searchQuery = query || 'software developer';
     const userSkills = skills || [];
+    const searchLocation = location || '';
 
-    console.log(`Searching jobs: query="${searchQuery}", skills=${userSkills.join(',')}, location=${location}, experience=${experience}`);
+    console.log(`Searching: query="${searchQuery}", skills=${userSkills.join(',')}, location=${searchLocation}, exp=${experience}`);
 
-    // Fetch from all free APIs in parallel
-    const [remotiveJobs, arbeitnowJobs, jobicyJobs] = await Promise.all([
+    // Fetch from all APIs in parallel — JSearch gets location context
+    const [jsearchJobs, remotiveJobs, arbeitnowJobs, jobicyJobs] = await Promise.all([
+      fetchJSearch(searchQuery, searchLocation),
       fetchRemotive(searchQuery),
       fetchArbeitnow(searchQuery),
-      fetchJoBoard(searchQuery),
+      fetchJobicy(searchQuery),
     ]);
 
-    console.log(`Results: Remotive=${remotiveJobs.length}, Arbeitnow=${arbeitnowJobs.length}, Jobicy=${jobicyJobs.length}`);
+    console.log(`Results: JSearch=${jsearchJobs.length}, Remotive=${remotiveJobs.length}, Arbeitnow=${arbeitnowJobs.length}, Jobicy=${jobicyJobs.length}`);
 
-    let allJobs = [...remotiveJobs, ...arbeitnowJobs, ...jobicyJobs];
+    // Merge all results — JSearch first (best location data)
+    let allJobs = [...jsearchJobs, ...remotiveJobs, ...arbeitnowJobs, ...jobicyJobs];
 
-    // Filter by location if specified
-    if (location && location !== 'any location' && location !== '') {
-      const locationLower = location.toLowerCase();
-      const locationFiltered = allJobs.filter(j =>
-        j.location.toLowerCase().includes(locationLower) ||
-        j.location.toLowerCase().includes('remote') ||
-        j.location.toLowerCase().includes('anywhere')
-      );
-      if (locationFiltered.length > 3) {
-        allJobs = locationFiltered;
-      }
-    }
+    // Filter by location
+    allJobs = filterByLocation(allJobs, searchLocation);
 
     // Deduplicate by title + company
     const seen = new Set<string>();
@@ -233,8 +317,8 @@ Deno.serve(async (req) => {
     // Sort by match score descending
     allJobs.sort((a, b) => b.match_score - a.match_score);
 
-    // Limit to top 20
-    allJobs = allJobs.slice(0, 20);
+    // Limit to top 25
+    allJobs = allJobs.slice(0, 25);
 
     console.log(`Returning ${allJobs.length} jobs`);
 
