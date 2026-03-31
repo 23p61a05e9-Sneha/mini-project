@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Mail, Send, Copy, Inbox, CheckCircle, Bot, Sparkles } from "lucide-react";
+import { Mail, Send, Copy, Inbox, CheckCircle, Bot, Sparkles, Loader2 } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 import { supabase } from "@/integrations/supabase/client";
 import AppLayout from "@/components/AppLayout";
@@ -10,27 +10,48 @@ import { toast } from "sonner";
 const EmailPreview = () => {
   const { applications, setApplications } = useApp();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
 
   const pendingEmails = applications.filter((a) => !a.email_sent && a.email_body);
   const selected = pendingEmails.find((a) => a.id === selectedId) || pendingEmails[0];
 
   const handleSend = async (appId: string) => {
-    const { error } = await supabase
-      .from("applications")
-      .update({ email_sent: true, status: "emailed" })
-      .eq("id", appId);
+    const app = applications.find((a) => a.id === appId);
+    if (!app) return;
 
-    if (error) {
-      toast.error("Failed to update status");
-      return;
+    setSending(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('send-email', {
+        body: {
+          to: app.job?.recruiter_email,
+          subject: app.email_subject || `Application for ${app.job?.title}`,
+          body: app.email_body || '',
+          applicationId: appId,
+        },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      setApplications(
+        applications.map((a) => (a.id === appId ? { ...a, email_sent: true, status: "emailed" } : a))
+      );
+      toast.success("Email sent successfully!", {
+        description: `Outreach sent to ${app.job?.recruiter_email || "recruiter"}`,
+      });
+    } catch (err: any) {
+      console.error('Send error:', err);
+      const msg = err?.message || 'Failed to send email';
+      if (msg.includes('SMTP not configured') || msg.includes('Gmail')) {
+        toast.error("SMTP not configured", {
+          description: "Go to Settings to add your Gmail credentials first.",
+        });
+      } else {
+        toast.error("Failed to send email", { description: msg });
+      }
+    } finally {
+      setSending(false);
     }
-
-    setApplications(
-      applications.map((a) => (a.id === appId ? { ...a, email_sent: true, status: "emailed" } : a))
-    );
-    toast.success("Email marked as sent!", {
-      description: `Outreach to ${applications.find((a) => a.id === appId)?.job?.recruiter_name || "recruiter"}`,
-    });
   };
 
   const handleCopy = (text: string) => {
@@ -82,7 +103,7 @@ const EmailPreview = () => {
                   <p className="text-sm font-bold text-foreground truncate font-display">{app.job?.title || "Unknown"}</p>
                   <p className="text-xs text-muted-foreground mt-0.5 font-medium">{app.job?.company || "Unknown"}</p>
                   <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1.5">
-                    <Mail className="h-3 w-3 text-info" /> {app.job?.recruiter_email || "N/A"}
+                    <Mail className="h-3 w-3 text-info" /> {app.job?.recruiter_email || "No email found"}
                   </p>
                 </motion.button>
               ))}
@@ -98,7 +119,7 @@ const EmailPreview = () => {
                 <div className="flex items-start justify-between mb-6 pb-5 border-b border-border/40">
                   <div className="space-y-2">
                     <p className="text-xs text-muted-foreground">
-                      To: <span className="text-foreground font-semibold">{selected.job?.recruiter_email}</span>
+                      To: <span className="text-foreground font-semibold">{selected.job?.recruiter_email || "No email"}</span>
                     </p>
                     <p className="text-xs text-muted-foreground">
                       Subject: <span className="text-foreground font-semibold">{selected.email_subject || `Application for ${selected.job?.title}`}</span>
@@ -108,8 +129,14 @@ const EmailPreview = () => {
                     <Button variant="outline" size="sm" onClick={() => handleCopy(selected.email_body || "")} className="h-10 gap-1.5 rounded-xl border-border/60">
                       <Copy className="h-3.5 w-3.5" /> Copy
                     </Button>
-                    <Button size="sm" className="bg-gradient-primary text-primary-foreground hover:opacity-90 h-10 gap-1.5 rounded-xl shadow-glow font-semibold" onClick={() => handleSend(selected.id)}>
-                      <Send className="h-3.5 w-3.5" /> Send
+                    <Button
+                      size="sm"
+                      className="bg-gradient-primary text-primary-foreground hover:opacity-90 h-10 gap-1.5 rounded-xl shadow-glow font-semibold"
+                      onClick={() => handleSend(selected.id)}
+                      disabled={sending || !selected.job?.recruiter_email}
+                    >
+                      {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                      {sending ? "Sending..." : "Send"}
                     </Button>
                   </div>
                 </div>
@@ -118,9 +145,9 @@ const EmailPreview = () => {
                 </div>
                 <div className="mt-5 flex items-center gap-2 text-xs text-muted-foreground">
                   <Bot className="h-4 w-4 text-primary" />
-                  <span>Generated by AI Email Agent · Gemini LLM</span>
+                  <span>Generated by AI Email Agent</span>
                   <CheckCircle className="h-3.5 w-3.5 text-success ml-auto" />
-                  <span className="text-success font-medium">Verified</span>
+                  <span className="text-success font-medium">Ready to send</span>
                 </div>
               </motion.div>
             )}

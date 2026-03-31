@@ -217,6 +217,83 @@ function filterByLocation(jobs: JobResult[], location: string): JobResult[] {
   return filtered;
 }
 
+// ─── AI recruiter email enrichment ────────────────────────────────
+async function enrichWithRecruiterEmails(jobs: JobResult[]): Promise<JobResult[]> {
+  const jobsNeedingEmails = jobs.filter(j => !j.recruiter_email);
+  if (!jobsNeedingEmails.length) return jobs;
+
+  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+  if (!LOVABLE_API_KEY) {
+    // Fallback: generate standard HR email patterns
+    return jobs.map(j => {
+      if (j.recruiter_email) return j;
+      const domain = j.company.toLowerCase().replace(/[^a-z0-9]/g, '') + '.com';
+      return { ...j, recruiter_email: `careers@${domain}`, recruiter_name: j.recruiter_name || `${j.company} HR Team` };
+    });
+  }
+
+  try {
+    const companies = jobsNeedingEmails.map((j, i) => `${i}: ${j.company} (${j.title})`).join('\n');
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash-lite',
+        messages: [
+          {
+            role: 'system',
+            content: `You are an expert at finding real recruiter/HR contact emails for companies. For each company, provide the most likely real HR/recruiting email address. Use common patterns like:
+- careers@company.com, hr@company.com, jobs@company.com, recruiting@company.com, talent@company.com
+- For well-known companies, use their actual domain (e.g., careers@google.com, jobs@microsoft.com)
+- For startups, use the company name domain
+Return ONLY a JSON array of objects with "email" and "name" fields. No explanation.`
+          },
+          { role: 'user', content: `Find the most likely real recruiter/HR email for each company:\n${companies}` }
+        ],
+        temperature: 0.3,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error('AI email enrichment error:', response.status);
+      return jobs.map(j => {
+        if (j.recruiter_email) return j;
+        const domain = j.company.toLowerCase().replace(/[^a-z0-9]/g, '') + '.com';
+        return { ...j, recruiter_email: `careers@${domain}`, recruiter_name: j.recruiter_name || `${j.company} HR Team` };
+      });
+    }
+
+    const aiData = await response.json();
+    let content = aiData.choices?.[0]?.message?.content || '[]';
+    content = content.trim().replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
+    const emails = JSON.parse(content);
+
+    if (Array.isArray(emails)) {
+      let idx = 0;
+      return jobs.map(j => {
+        if (j.recruiter_email) return j;
+        const emailData = emails[idx++];
+        return {
+          ...j,
+          recruiter_email: emailData?.email || `careers@${j.company.toLowerCase().replace(/[^a-z0-9]/g, '')}.com`,
+          recruiter_name: emailData?.name || j.recruiter_name || `${j.company} HR Team`,
+        };
+      });
+    }
+  } catch (err) {
+    console.error('Email enrichment error:', err);
+  }
+
+  return jobs.map(j => {
+    if (j.recruiter_email) return j;
+    const domain = j.company.toLowerCase().replace(/[^a-z0-9]/g, '') + '.com';
+    return { ...j, recruiter_email: `careers@${domain}`, recruiter_name: j.recruiter_name || `${j.company} HR Team` };
+  });
+}
+
 // ─── AI match scoring ─────────────────────────────────────────────
 async function enrichWithMatchScores(jobs: JobResult[], userSkills: string[]): Promise<JobResult[]> {
   if (!jobs.length || !userSkills.length) {
@@ -310,6 +387,9 @@ Deno.serve(async (req) => {
       seen.add(key);
       return true;
     });
+
+    // Enrich with recruiter emails using AI
+    allJobs = await enrichWithRecruiterEmails(allJobs);
 
     // Enrich with AI match scores
     allJobs = await enrichWithMatchScores(allJobs, userSkills);
