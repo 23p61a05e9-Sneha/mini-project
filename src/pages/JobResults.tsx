@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { MapPin, Briefcase, Star, Mail, ChevronDown, ChevronUp, Sparkles, Filter, ArrowLeft, ExternalLink } from "lucide-react";
+import { MapPin, Briefcase, Star, Mail, ChevronDown, ChevronUp, Sparkles, Filter, ArrowLeft, ExternalLink, Loader2 } from "lucide-react";
 import { useApp, JobRow } from "@/context/AppContext";
-import { generateEmail } from "@/lib/mockApi";
 import { supabase } from "@/integrations/supabase/client";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
@@ -83,7 +82,8 @@ const JobCard = ({ job, onApply, isApplying, index }: { job: JobRow; onApply: (j
             className="bg-gradient-primary text-primary-foreground hover:opacity-90 h-10 rounded-xl font-semibold px-4"
             onClick={() => onApply(job)}
           >
-            <Mail className="h-4 w-4 mr-1.5" /> Apply
+            {isApplying ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Mail className="h-4 w-4 mr-1.5" />}
+            Apply
           </Button>
         </div>
       </div>
@@ -103,10 +103,13 @@ const JobCard = ({ job, onApply, isApplying, index }: { job: JobRow; onApply: (j
                   <span key={s} className="text-xs bg-primary/8 text-primary px-3 py-1.5 rounded-lg font-semibold border border-primary/15">{s}</span>
                 ))}
               </div>
-              {job.recruiter_name && (
+              {(job.recruiter_name || job.recruiter_email) && (
                 <div className="flex items-center gap-2 bg-secondary/30 rounded-xl p-3 text-xs text-muted-foreground">
                   <Star className="h-4 w-4 text-warning shrink-0" />
-                  <span>Recruiter: <span className="text-foreground font-semibold">{job.recruiter_name}</span> · {job.recruiter_email}</span>
+                  <span>
+                    {job.recruiter_name && <>Recruiter: <span className="text-foreground font-semibold">{job.recruiter_name}</span></>}
+                    {job.recruiter_email && <> · <span className="text-info">{job.recruiter_email}</span></>}
+                  </span>
                 </div>
               )}
             </div>
@@ -118,7 +121,7 @@ const JobCard = ({ job, onApply, isApplying, index }: { job: JobRow; onApply: (j
 };
 
 const JobResults = () => {
-  const { jobs, user, preferences, applications, setApplications } = useApp();
+  const { jobs, user, preferences, applications, setApplications, profile } = useApp();
   const navigate = useNavigate();
   const [generatingFor, setGeneratingFor] = useState<string | null>(null);
 
@@ -127,24 +130,45 @@ const JobResults = () => {
     setGeneratingFor(job.id);
 
     try {
-      const email = await generateEmail(job, user.user_metadata?.name || user.email?.split("@")[0] || "User", preferences.skills);
+      // Generate email using AI edge function
+      const { data: emailResult, error: emailError } = await supabase.functions.invoke('generate-email', {
+        body: {
+          job: {
+            title: job.title,
+            company: job.company,
+            location: job.location,
+            description: job.description,
+            skills: job.skills,
+            recruiter_name: job.recruiter_name,
+            recruiter_email: job.recruiter_email,
+          },
+          userName: profile?.name || user.user_metadata?.name || user.email?.split("@")[0] || "User",
+          userSkills: preferences.skills,
+        },
+      });
+
+      if (emailError) throw emailError;
+
+      const emailBody = emailResult?.email || `Dear ${job.recruiter_name || 'Hiring Manager'},\n\nI am interested in the ${job.title} position at ${job.company}.\n\nBest regards`;
+      const emailSubject = emailResult?.subject || `Application for ${job.title} at ${job.company}`;
 
       const { data, error } = await supabase.from("applications").insert({
         user_id: user.id,
         job_id: job.id,
         status: "applied",
-        email_body: email,
-        email_subject: `Application for ${job.title} at ${job.company}`,
+        email_body: emailBody,
+        email_subject: emailSubject,
       }).select("*, jobs(*)").single();
 
       if (error) throw error;
 
       if (data) {
         setApplications([{ ...data, job: (data as any).jobs }, ...applications]);
-        toast.success("Application created!", { description: "Email generated. Review it in Email Outreach." });
+        toast.success("Application created!", { description: "AI-generated email ready. Review it in Email Outreach." });
         navigate("/email");
       }
-    } catch {
+    } catch (err) {
+      console.error('Apply error:', err);
       toast.error("Failed to create application");
     } finally {
       setGeneratingFor(null);

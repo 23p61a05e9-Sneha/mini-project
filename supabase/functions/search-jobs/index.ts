@@ -388,6 +388,9 @@ Deno.serve(async (req) => {
       return true;
     });
 
+    // Enrich with recruiter emails using AI
+    allJobs = await enrichWithRecruiterEmails(allJobs);
+
     // Enrich with AI match scores
     allJobs = await enrichWithMatchScores(allJobs, userSkills);
 
